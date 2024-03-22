@@ -23,7 +23,7 @@ class MainActivity : AppCompatActivity() {
         // URL of the webpage to parse
         val url = "https://www.iana.org/"
 
-        // Enable JavaScript in WebView. (this is if you want to use the same interactivity as the url defined)
+        // Enable JavaScript in WebView. (this is if you want to use the same interactivity in the website)
         webView.settings.javaScriptEnabled = true
 
         // Set WebView client to handle page navigation
@@ -36,13 +36,39 @@ class MainActivity : AppCompatActivity() {
                 // Fetch HTML content from the webpage using GET
                 val document = Jsoup.connect(url).get()
 
-                // htmlContent representing parsed HTML content, converted to String
-                val htmlContent = document.toString()
+                // Find all <link rel="stylesheet"> elements to fetch CSS
+                val cssLinks = document.select("link[rel=stylesheet]")
 
-                // Update UI on the main thread
+                // StringBuilder to hold all CSS
+                val allCss = StringBuilder()
+
+                // Fetch each CSS linked in the HTML and append it to allCss
+                cssLinks.forEach { link ->
+                    val cssUrl = link.absUrl("href") // Ensure the URL is absolute
+                    try {
+                        val cssContent =
+                            Jsoup.connect(cssUrl).ignoreContentType(true).execute().body()
+                        allCss.append(cssContent).append("\n")
+                    } catch (e: Exception) {
+                        Log.e("CSS Fetch Error", "Could not fetch CSS from $cssUrl", e)
+                    }
+                }
+
+                // Inject the fetched CSS into a <style> tag in the document's <head>
+                document.head().appendElement("style").text(allCss.toString())
+
+                // Convert the modified document to a string
+                val htmlContentWithInlineCss = document.toString()
+
+                // Load the modified HTML into the WebView on the main thread
                 withContext(Dispatchers.Main) {
-                    // Load HTML content into WebView
-                    webView.loadData(htmlContent, "text/html", "UTF-8")
+                    webView.loadDataWithBaseURL(
+                        "https://www.iana.org/",
+                        htmlContentWithInlineCss,
+                        "text/html",
+                        "UTF-8",
+                        null
+                    )
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
